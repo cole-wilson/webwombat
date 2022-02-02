@@ -1,0 +1,2 @@
+class BrokenWombat(Exception):
+    pass
