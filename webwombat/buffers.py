@@ -1,7 +1,8 @@
 import socket
 import ssl
-import code
-from constants import TERM
+import blessed
+
+TERM = blessed.Terminal()
 
 class SocketBuffer:
     def __init__(self, rfile, wfile,
@@ -46,12 +47,13 @@ class SocketBuffer:
             raise Exception(name + ' not supported')
 
     @classmethod
-    def from_address(cls, host: str, port: int, **kwargs):
+    def from_address(cls, host: str, port: int, usessl: bool, **kwargs):
         remote_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         remote_conn.connect((host, port))
-        context = ssl.create_default_context()
-        context.verify_mode = ssl.CERT_REQUIRED
-        remote_conn = context.wrap_socket(remote_conn, server_hostname=host)
+        if usessl:
+            context = ssl.create_default_context()
+            context.verify_mode = ssl.CERT_REQUIRED
+            remote_conn = context.wrap_socket(remote_conn, server_hostname=host)
         resp = cls(
             remote_conn.makefile('rb'),
             remote_conn.makefile('wb', buffering=0),

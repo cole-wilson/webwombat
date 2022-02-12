@@ -1,148 +1,146 @@
-import filters
-import exceptions
+import io
+from . import filters
+from . import BrokenWombat
 import brotli
 import gzip
 import zlib
-from constants import PORT
 from threading import Thread
-from buffers import SocketBuffer
-from requests.structures import CaseInsensitiveDict
+from .buffers import SocketBuffer
 
 CRLF = b"\r\n"
 
-def read_chunk(r, func):
+def read_chunk(r):
     lengthline = r.readline().strip(CRLF)
     if not lengthline: return None
     length = int(lengthline, 16)
     if length == 0:
         r.read(2)
         return None
-    chunk = func(r.read(length))
+    chunk = r.read(length)
     r.read(2)
     return chunk
 
-def stream_chunks(r, w, func):
+def stream_chunks(r, w, function):
     while True:
-        chunk = read_chunk(r, func)
+        chunk = function(read_chunk(r))
         if chunk:
             length = hex(len(chunk))[2:].encode('utf-8')
             w.write(length + CRLF + chunk + CRLF)
         else:
             w.write(b"0" + CRLF + CRLF)
             break
+        print('got')
+
+class CaseInsensitiveDict(dict):
+    def __init__(self, initial_values = {}, **_):
+        for k, v in initial_values.items():
+            self[k.lower()] = v
+    def __getitem__(self, k): return super().__getitem__(k.lower())
+    def __delitem__(self, k): return super().__delitem__(k.lower())
+    def __setitem__(self, k, v): return super().__setitem__(k.lower(), v)
 
 class Message:
-    def __init__(self, file: SocketBuffer, function):
-        self.function = function
-        self.source = file
-        self.statusline = self.function(self.source.readline().strip(CRLF))
+    messagetype = None
+    sourcefile = io.BytesIO(b"")
+
+    method = "GET"
+    locator = "/"
+    version = "HTTP/1.1"
+    status = "0"
+    reason = "none"
+    headers: dict[str, str] = CaseInsensitiveDict({})
+
+
+    def __init__(self, file: SocketBuffer, messagetype: str):
+        self.function = lambda i: i
+        self.messagetype = messagetype
+        self.sourcefile = file
+
+    def read_statusline(self):
+        statusline = self.sourcefile.readline().strip(CRLF).decode().split()
+        if self.messagetype == "request":
+            self.method, self.locator, self.version = statusline
+        elif self.messagetype == "response":
+            self.version, self.status, *reason = statusline
+            self.reason = " ".join(reason)
+
+    def read_headers(self):
         self.headers = CaseInsensitiveDict({})
         while True:
-            headerline = self.function(self.source.readline().strip(CRLF))
+            headerline = self.sourcefile.readline().strip(CRLF)
             if not headerline: break
             k, v = headerline.split(b": ", 1)
-            self.headers[str(k, 'utf-8')] = str(v, 'utf-8')
+            self.headers[k.decode()] = v.decode()
 
-    def transfer_body(self, destination) -> Thread:
-        func = self.function
-        if self.body_type == 'empty':
-            return Thread(target=destination.write, args=[bytes(self)])
-        elif self.body_type == 'normal':
-            if not self.headers['content-length'].isnumeric():
-                raise exceptions.BrokenWombat("the Content-Length of the request was non-numeric! what are you trying to do here?")
-            request_body = self.source.read(int(self.headers['content-length']))
+    def send_to(self, destination) -> Thread:
+        if self.body_type == "empty":
+            def _sendempty():
+                head = self.encode()
+                # head = self.function(head)
+                destination.write(head)
+            return Thread(target=destination.write, args=[self.encode()])
+        
+        elif self.body_type == "normal":
+            def _sendbody():
+                content_length = int(self['content-length'])
+                body = self.sourcefile.read(content_length)
+
+                decoders, encoders = self.get_dencoders()
+                for decoder in decoders:
+                    body = decoder(body)
+                body = self.function(body)
+                for encoder in encoders:
+                    body = encoder(body)
+
+                self['content-length'] = len(body)
+                destination.write(self.encode())
+                destination.write(body)
+            return Thread(target=_sendbody)
+
+        elif self.body_type == "chunked":
+            destination.write(self.encode())
+            if self.messagetype == "request":
+                early_response = Message(destination, "response")
+                early_response.read_statusline()
+                early_response.read_headers()
+                self.sourcefile.write(early_response.encode())
+            return Thread(target=stream_chunks, args=[self.sourcefile, destination, self.function])
+
+        elif self.body_type == "encoded_chunks":
+            destination.write(self.encode())
+            if self.messagetype == "request":
+                early_response = Message(destination, "response")
+                early_response.read_statusline()
+                early_response.read_headers()
+                self.sourcefile.write(early_response.encode())
+
             decoders, encoders = self.get_dencoders()
+            body = b""
+            while True:
+                chunk = read_chunk(self.sourcefile)
+                if chunk is None:
+                    break
+                body += chunk
             for decoder in decoders:
-                request_body = decoder(request_body)
-            request_body = func(request_body)
+                body = decoder(body)
+            body = self.function(body)
             for encoder in encoders:
-                request_body = encoder(request_body)
-            self.headers['content-length'] = len(request_body)
-            def _send_body():
-                destination.write(bytes(self))
-                destination.write(request_body)
-            return Thread(target=_send_body)
-        elif 'chunk' in self.body_type:
-            destination.write(bytes(self))
-            if self.is_request():
-                early_response = Message(destination, filters.wombatize)
-                if early_response.code != 100:
-                    raise exceptions.BrokenWombat(f"the remote server returned {early_response.code} instead of 100.")
-                self.source.write(bytes(early_response))
+                body = encoder(body)
+            def _sendchunk():
+                length = hex(len(body))[2:].encode()
+                destination.write(length + CRLF + body + CRLF)
+                destination.write(b"0" + CRLF + CRLF)
+            return Thread(target=_sendchunk)
+        return Thread(target=lambda: None)
 
-            if self.body_type == 'chunked':
-                return Thread(target=stream_chunks, args=[self.source, destination, self.function])
-            else:
-                def _waitsendchunks():
-                    body = b""
-                    while True:
-                        chunk = read_chunk(self.source, lambda i: i) # we mustn't mess up encoded data
-                        if chunk is None: break
-                        body += chunk
-                    decoders, encoders = self.get_dencoders()
-                    for decoder in decoders:
-                        body = decoder(body)
-                    body = self.function(body)
-                    for encoder in encoders:
-                        body = encoder(body)
-                    hexlen = hex(len(body))[2:].encode('utf-8')
-                    destination.write(hexlen + CRLF + body + CRLF)
-                    destination.write(b"0" + CRLF + CRLF)
-                return Thread(target=_waitsendchunks)
+    @property
+    def statusline(self) -> bytes:
+        if self.messagetype == "request":
+            return " ".join([self.method, self.locator, self.version]).encode()
+        elif self.messagetype == "response":
+            return " ".join([self.version, self.status, self.reason]).encode()
         else:
-            return Thread(target=lambda i: i)
-
-
-    def is_response(self) -> bool: return self.statusline.startswith(b"HTTP")
-
-    def is_request(self) -> bool: return not self.is_response()
-
-    @property
-    def port(self) -> int:
-        assert self.is_request(), "tried to get port on a response"
-        h: str = self.headers['host']
-        if ':' in h:
-            p = h.split(':')[1]
-            if not p.isnumeric():
-                raise exceptions.BrokenWombat("the host port is non-numeric")
-            else:
-                return int(p)
-        else:
-            return PORT
-
-    @property
-    def host(self) -> str:
-        assert self.is_request(), "tried to get host on a response"
-        if 'host' not in self.headers:
-            raise exceptions.BrokenWombat("the Host header is required for all HTTP verbs other than CONNECT")
-        return self.headers['host'].split(':')[0]
-
-    @property
-    def verb(self) -> str:
-        assert self.is_request(), "tried to get verb on a response"
-        return str(self.statusline.split(b" ")[0], 'utf-8')
-
-    @property
-    def locator(self) -> str:
-        assert self.is_request(), "tried to get locator on a response"
-        return str(self.statusline.split(b" ")[1], 'utf-8')
-
-    @property
-    def version(self) -> str:
-        if self.is_request():
-            return str(self.statusline.split(b" ")[2], 'utf-8')
-        else:
-            return str(self.statusline.split(b" ")[0], 'utf-8')
-
-    @property
-    def code(self) -> int:
-        assert self.is_response(), "tried to get response code on a request"
-        return int(self.statusline.split(b" ")[1])
-
-    @property
-    def reason(self) -> str:
-        assert self.is_response(), "tried to get response reason on a request"
-        return str(self.statusline.split(b" ")[2], 'utf-8')
+            return b""
 
     @property
     def body_type(self) -> str:
@@ -172,18 +170,25 @@ class Message:
                     decoders.insert(0, decoder)
                     encoders.append(encoder)
                 except KeyError:
-                    raise exceptions.BrokenWombat(f"the `{encoding}` encoding is not supported")
+                    raise BrokenWombat(f"the `{encoding}` encoding is not supported")
             return decoders, encoders
 
-    def __repr__(self):
-       return f"<{type(self).__name__} {str(self.statusline, 'utf-8')}>"
+    def __getitem__(self, name):
+        return self.headers[name]
+    def __setitem__(self, name, value):
+        self.headers[name] = value
+    def __delitem__(self, name):
+        del self.headers[name]
 
-    def __bytes__(self, *args):
+    def __repr__(self):
+       return f"<{type(self).__name__} {self.statusline.decode()}>"
+
+    def __bytes__(self, *_):
         output = b""
         output += self.statusline + CRLF
         for k, v in self.headers.items():
             output += str(k).title().encode('utf-8') + b": " + str(v).encode('utf-8') + CRLF
         output += CRLF
-        return output
+        return self.function(output)
 
     encode = __bytes__

@@ -1,0 +1,47 @@
+%import common.ESCAPED_STRING -> STRING
+%import common.WS
+%ignore WS
+%ignore COMMENT
+COMMENT: /\/\*.*?\*\//
+
+start: keyvalue_group main
+
+keyvalue_group: keyvalue*
+main: group*
+keyvalue: NAME "=" (arg | list)
+arg: BOOL | NUMBER | NAME | ENV | STRING 
+list: arg ("," arg)+
+
+group: matchgroup /-*>+/ actiongroup
+
+matchhead:"[" TYPE METHOD* DOMAIN+ PATH* "]"
+	  	| "[" TYPE STATUS* DOMAIN+ PATH* "]"
+header: HEADER_KEY ":" HEADER_VALUE ("|" HEADER_VALUE)*
+	  | HEADER_KEY "?"
+matchgroup: matchhead headers
+
+actionhead: "[" [METHOD] [DOMAIN] [PATH] "]"
+		  | "[" [STATUS] [DOMAIN] [PATH] "]"
+actiongroup: [actionhead] headers SUB_REGEX*
+		   | funcref
+funcref: dotted ":" dotted
+dotted: NAME ("." NAME)*
+headers: header*
+
+BOOL: /true/i | /false/i | /no/i | /yes/i | "nah" | "yah" | "yep"
+NUMBER: /\d+/
+ENV: "$" NAME
+NAME: /[a-zA-Z_]+/
+STATUS: /[\dxX]+/
+METHOD: /[A-Z\?]+/
+DOMAIN: /[a-z-*.]+/
+PATH: /\/[^ \]]*/
+HEADER_KEY: /[\w-]+/
+		  | "*"
+HEADER_VALUE: /.+\n/
+			| "\n"
+TYPE: "response" | "request"
+SUB_REGEX: "/" _REGEX_ESC_INNER "/" _REGEX_ESC_INNER "/" _REGEX_FLAGS?
+_REGEX_INNER: /.*?/
+_REGEX_ESC_INNER: _REGEX_INNER /(?<!\\)(\\\\)*?/
+_REGEX_FLAGS: /[igmsuy]+/i
