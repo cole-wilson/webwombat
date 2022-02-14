@@ -19,6 +19,7 @@ def filter(message):
     for rule in rules:
         try:
             match = rule['match']
+            print(match)
             action= rule['action']
 
             ismatch(match.type, message.messagetype)

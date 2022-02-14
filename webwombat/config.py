@@ -55,6 +55,8 @@ class ComiledSubstitution:
     def __repr__(self):
         return f"<CompiledSubstitution {repr(self.compiled)}, {self.replacewith}>"
     def sub(self, text, **variables):
+        if text is None:
+            return b""
         r = self.replacewith.decode().format(**variables).encode()
         return self.compiled.sub(r, text)
 
@@ -75,10 +77,10 @@ class Transformer(lark.Transformer):
         return {"match": match, "action": action}
     def matchhead(self, items):
         out = defaultdict(list)
-        out['method'] = ["*"]
-        out['status'] = ["*"]
-        out['path'] = ["/", "/*"]
         for k, v in items: out[k].append(v)
+        if 'method' not in out: out['method'] = ["*"]
+        if 'status' not in out: out['status'] = ["*"]
+        if 'path' not in out: out['path'] = ["*"]
         return DottedDict(out)
     def actionhead(self, items):
         return DottedDict(filter(lambda i: i is not None, items))

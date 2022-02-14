@@ -29,7 +29,6 @@ def stream_chunks(r, w, function):
         else:
             w.write(b"0" + CRLF + CRLF)
             break
-        print('got')
 
 class CaseInsensitiveDict(dict):
     def __init__(self, initial_values = {}, **_):
