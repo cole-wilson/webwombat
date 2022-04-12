@@ -1,8 +1,8 @@
 host = ""
 
-[request *.proxy] -> [*]
-[response *] -> [*.proxy]
-/\.(com|ws|org|net|gov)(#|\/)/.\1.proxy\2/i
+[request *.laptop.cole.ws] -> [*]
+[response *] -> [*.laptop.cole.ws]
+/\.(com|ws|org|net|gov)(#|\/)/.\1.laptop.cole.ws\2/i
 
 
 [response 404 *] -> [200]
