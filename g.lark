@@ -9,7 +9,7 @@ start: keyvalue_group main
 keyvalue_group: keyvalue*
 main: group*
 keyvalue: NAME "=" (arg | list)
-arg: BOOL | NUMBER | NAME | ENV | STRING 
+arg: BOOL | NUMBER | NAME | ENV | STRING
 list: arg ("," arg)+
 
 group: matchgroup /-*>+/ actiongroup
@@ -22,20 +22,20 @@ matchgroup: matchhead headers
 
 actionhead: "[" [METHOD] [DOMAIN] [PATH] "]"
 		  | "[" [STATUS] [DOMAIN] [PATH] "]"
-actiongroup: [actionhead] headers SUB_REGEX*
-		   | funcref
-funcref: dotted ":" dotted
+actiongroup: [actionhead] [headers] [funcref*] (SUB_REGEX)*
+
+funcref: "@" [dotted ":"] dotted (arg | list)*
 dotted: NAME ("." NAME)*
 headers: header*
 
-BOOL: /true/i | /false/i | /no/i | /yes/i | "nah" | "yah" | "yep"
+BOOL: /true/i | /false/i | /no/i | /yes/i | /nah/i | /yah/i | /yep/i
 NUMBER: /\d+/
 ENV: "$" NAME
 NAME: /[a-zA-Z_]+/
 STATUS: /[\dxX]+/
 METHOD: /[A-Z\?]+/
 DOMAIN: /[a-z-*.]+/
-PATH: /\/[^ \]]*/
+PATH: /[\/|http|ws][^ \]]*/
 HEADER_KEY: /[\w-]+/
 		  | "*"
 HEADER_VALUE: /.+\n/

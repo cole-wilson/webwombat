@@ -2,6 +2,7 @@ import ssl
 import socket
 from . import messages, filters, buffers, certs, WOMBAT
 from . import WOMBAT
+from .config import get_config
 
 def main(browser, port, usessl):
     request = messages.Message(browser, "request")
@@ -9,8 +10,16 @@ def main(browser, port, usessl):
     request.read_headers()
 
     request = filters.filter(request)
-   
-    remote = buffers.SocketBuffer.from_address(request['host'], port, usessl, fstring = "│ {m} │    │", rcolor = "red", wcolor = "yellow", read_mark = "->", write_mark = "<-")
+
+    if request.messagetype == 'response': # return without proxying anything
+        response = request
+        response_thread = response.send_to(browser)
+        response_thread.start()
+        response_thread.join()
+        browser.flush()
+        return
+
+    remote = buffers.SocketBuffer.from_address(request['host'], request.port or port, usessl, fstring = "│ {m} │    │", rcolor = "red", wcolor = "yellow", read_mark = "->", write_mark = "<-")
 
     send_thread = request.send_to(remote)
     send_thread.start()
@@ -29,8 +38,10 @@ def main(browser, port, usessl):
 
     remote.close()
     browser.flush()
+    return
 
 def handler(sock, port):
+    config = get_config()
     start_byte = sock.recv(1, socket.MSG_PEEK)
     usessl = False
     if start_byte == b"\x16":
@@ -40,10 +51,12 @@ def handler(sock, port):
         usessl = True
     rfile, wfile = sock.makefile('rb'), sock.makefile('wb', buffering=0)
     browser = buffers.SocketBuffer(rfile, wfile, fstring = "│    │ {m} │", read_mark = "<-", write_mark = "->")
-    # try:
-    main(browser, port, usessl=usessl)
-    # except Exception as error:
-        # error_text = WOMBAT.encode() + type(error).__name__.encode('utf-8') + b":\n" + str(error).encode('utf-8')
-        # browser.write(b"HTTP/1.1 502 Broken Wombat\r\nContent-Length: " + str(len(error_text)).encode('utf-8') + b"\r\n\r\n" + error_text)
+    try:
+        main(browser, port, usessl=usessl)
+    except Exception as error:
+        if config.raise_errors:
+            raise error
+        error_text = WOMBAT.encode() + type(error).__name__.encode('utf-8') + b":\n" + str(error).encode('utf-8')
+        browser.write(b"HTTP/1.1 502 Broken Wombat\r\nContent-Length: " + str(len(error_text)).encode('utf-8') + b"\r\n\r\n" + error_text)
     browser.flush()
     sock.close()

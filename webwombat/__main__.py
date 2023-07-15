@@ -1,14 +1,27 @@
-from . import WOMBAT
+from . import WOMBAT, certs
 from .config import load as load_config, get_config
 from .handler import handler
+from .logger import handler as loghandler, log, LogLevel
+from websockets.sync.server import serve
+import ssl
+from . import __version__
 import sys
 import socket
-from time import sleep
 import argparse
-import os
 from threading import Thread
+import websockets
 
 from webwombat import config
+
+
+def logserver():
+    config = get_config()
+
+    print(f"listening on {config.host}:{config.websocket_port} [logging websocket]")
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    ssl_context.set_servername_callback(certs.handle_ssl)
+    with serve(loghandler, host=config.host, port=config.websocket_port, ssl_context=ssl_context) as server:
+        server.serve_forever()
 
 def server(port):
     config = get_config()
@@ -33,13 +46,18 @@ def server(port):
         threads.pop(0).join()
 
 def main(args = sys.argv[1:]):
+    log(LogLevel.INFO, f"started webwombat server v{__version__}")
+
     parser = argparse.ArgumentParser(description=WOMBAT + 'a filter-bypass proxy and site mirror with extensive configuration options', formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('config', default="~/.config/wombat/config.cube", help='the path of the configuration file')
-    parser.add_argument('-p', '--port', type=int, default=443, help='the port to listen on')
-    args = parser.parse_args(args)
+    # parser.add_argument('-p', '--port', type=int, default=443, help='the port to listen on')
+    args, unknown = parser.parse_known_args(args)
+    print(unknown)
 
     default_config = {
         "ports": [80, 443],
+        "websocket_port": 842,
+        "raise_errors": False,
         "certdir": "~/.cache/wombat/",
         "cacertdir": "~/.config/wombat/",
         "ca_name": "Wombat Networking Authority",
@@ -50,12 +68,22 @@ def main(args = sys.argv[1:]):
     config = get_config()
 
     portthreads = []
+
+    if config.websocket_port > 0:
+        websocketThread = Thread(target=logserver)
+        websocketThread.start()
+        portthreads.append(websocketThread)
+    if not isinstance(config.ports, list):
+        config.ports = [config.ports]
     for port in config.ports:
         thread = Thread(target=server, args=[port])
         thread.start()
         portthreads.append(thread)
-    for child in portthreads:
-        child.join()
+    try:
+        for child in portthreads:
+            child.join()
+    except KeyboardInterrupt:
+        print('shutting down...')
     # print('all ports are shut down')
 
     return 0

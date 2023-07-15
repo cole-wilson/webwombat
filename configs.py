@@ -9,8 +9,12 @@ import json
 import re
 import sys
 import os
+# from .logger import log, LogLevel
+from . import logger
 
-grammar = open('./g.lark').read()
+grammar_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/g.lark"
+grammar = open(grammar_path).read()
+logger.log(logger.LogLevel.CONFIG, "loaded configuration grammar from {grammar_path}")
 
 def star_replace(pattern, replace, text):
     # ?.*.com    *.?.proxy    a.google.com
@@ -40,15 +44,19 @@ class DottedDict(dict):
     __delattr__ = lambda self, *args: self.__delitem__(*args)
 
 class ExternalObject:
-    def __init__(self, modulestr, attrstr):
+    def __init__(self, modulestr=None, attrstr=None, *args):
+        if modulestr == None:
+            modulestr = "webwombat.transformers"
         self.modulestr = modulestr
         self.attrstr = attrstr
+        self.args = args
 
     def get(self):
         module = importlib.import_module(self.modulestr)
         return operator.attrgetter(self.attrstr)(module)
 
 class ComiledSubstitution:
+    args = []
     def __init__(self, compiled, replacewith):
         self.compiled = compiled
         self.replacewith = replacewith
@@ -59,6 +67,8 @@ class ComiledSubstitution:
             return b""
         r = self.replacewith.decode().format(**variables).encode()
         return self.compiled.sub(r, text)
+    def get(self):
+        return self.sub
 
 class Transformer(lark.Transformer):
     # rules
@@ -66,7 +76,8 @@ class Transformer(lark.Transformer):
     def main(self, items): return items
     def keyvalue_group(self, items): return DottedDict(items)
     def headers(self, items): return dict(items)
-    def funcref(self, items): return ExternalObject(*items)
+    def funcref(self, items):
+        return ExternalObject(*items)
     def dotted(self, parts): return ".".join(parts)
 
     def header(self, items):
@@ -89,18 +100,25 @@ class Transformer(lark.Transformer):
         match['headers'] = headers
         return match
     def actiongroup(self, items):
-        if isinstance(items[0], ExternalObject):
-            return items[0]
-        head, headers, *subs = items
-        if head is None: head = defaultdict(None)
+        head, headers, *stuffs = items
+        if head is None: head = DottedDict(defaultdict(None))
+
+        subs, funcs = [], []
+
+        for thing in stuffs:
+            if isinstance(thing, ExternalObject):
+                funcs.append(thing)
+            else:
+                subs.append(thing)
+
         head['headers'] = headers
-        head['headers'] = headers
-        head['substitutions'] = subs
+        head['funcs'] = funcs
+        head['subs'] = subs
         return head
 
     # TERMINALS
     def ENV(self, text): return os.environ.get(text[1:], "")
-    def BOOL(self, text): return text.lower() in ['false', 'no', 'nah']
+    def BOOL(self, text): return text.lower() not in ['false', 'no', 'nah']
     def NUMBER(self, text): return int(text)
     def STATUS(self, text): return "status", str(text).replace('x', '?')
     def TYPE(self, text): return "type", str(text)
@@ -111,7 +129,7 @@ class Transformer(lark.Transformer):
             if hasattr(re, flag.upper()):
                 ordflags |= getattr(re, flag.upper())
         compiled = re.compile(pattern.encode(), flags=ordflags)
-        return ComiledSubstitution(compiled, sub.encode())
+        return ComiledSubstitution(compiled, sub.encode()).sub
 
     DOMAIN = lambda _, i: ("domain", str(i))
     PATH = lambda _, i: ("path", str(i))

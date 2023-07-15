@@ -18,7 +18,7 @@ def generate_root_certificate():
         "EMAIL_ADDRESS": config.cert_email,
         "DN_QUALIFIER": "."
     }
-    
+
     # setup output directory
     outputdir = Path(config.cacertdir).expanduser()
     if not outputdir.exists():
@@ -92,7 +92,7 @@ def new_cert(domain):
     service_private_key = rsa.generate_private_key(public_exponent=65537,key_size=2048,)
     service_public_key = service_private_key.public_key()
     builder = x509.CertificateBuilder()
-    metadata = [x509.NameAttribute(getattr(NameOID, k.upper()), v) for k, v in options.items()] 
+    metadata = [x509.NameAttribute(getattr(NameOID, k.upper()), v) for k, v in options.items()]
     builder = builder.subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, domain)]))
     builder = builder.issuer_name(x509.Name(metadata))
     builder = builder.not_valid_before(datetime.datetime(1997, 5, 26))
@@ -123,5 +123,5 @@ def handle_ssl(sock, hostname, _):
         certfile=certdir / f"{hostname}.pem",
         keyfile=certdir / f"{hostname}.key",
     )
-    print(certdir/f"{hostname}.pem")
+    # print(certdir/f"{hostname}.pem")
     sock.context = context

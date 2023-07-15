@@ -4,6 +4,7 @@ from . import BrokenWombat
 import brotli
 import gzip
 import zlib
+import sys
 from threading import Thread
 from .buffers import SocketBuffer
 
@@ -42,11 +43,13 @@ class Message:
     messagetype = None
     sourcefile = io.BytesIO(b"")
 
+    port = None
+
     method = "GET"
     locator = "/"
     version = "HTTP/1.1"
     status = "0"
-    reason = "none"
+    reason = "No Reason"
     headers: dict[str, str] = CaseInsensitiveDict({})
 
 
@@ -59,6 +62,8 @@ class Message:
         statusline = self.sourcefile.readline().strip(CRLF).decode().split()
         if self.messagetype == "request":
             self.method, self.locator, self.version = statusline
+            if self.method == "CONNECT":
+                self.port = int(self.locator.split(':')[-1])
         elif self.messagetype == "response":
             self.version, self.status, *reason = statusline
             self.reason = " ".join(reason)
@@ -72,13 +77,17 @@ class Message:
             self.headers[k.decode()] = v.decode()
 
     def send_to(self, destination) -> Thread:
-        if self.body_type == "empty":
-            def _sendempty():
-                head = self.encode()
-                # head = self.function(head)
-                destination.write(head)
+        if self.body_type == "raw":
+            self.sourcefile.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+            while True:
+                data = self.sourcefile.read(1)
+                if data == b'': break
+                print(data, end='')
+                sys.stdout.flush()
+                destination.write(data)
+        elif self.body_type == "empty":
             return Thread(target=destination.write, args=[self.encode()])
-        
+
         elif self.body_type == "normal":
             def _sendbody():
                 content_length = int(self['content-length'])
@@ -143,7 +152,9 @@ class Message:
 
     @property
     def body_type(self) -> str:
-        if 'content-length' in self.headers:
+        if self.messagetype == 'request' and self.method == 'CONNECT':
+            return 'raw'
+        elif 'content-length' in self.headers:
             return 'normal'
         elif 'transfer-encoding' in self.headers and self.headers['transfer-encoding'].startswith('chunked'):
             if 'content-encoding' in self.headers:

@@ -1,8 +1,9 @@
 host = ""
 
-[request *.laptop.cole.ws] -> [*]
-[response *] -> [*.laptop.cole.ws]
-/\.(com|ws|org|net|gov)(#|\/)/.\1.laptop.cole.ws\2/i
+[request *.fbi.com] -> [*]
+
+[response *] -> [*.fbi.com]
+/\.(com|ws|org|net|gov|net|io)(#|\/)/.\1.fbi.com\2/i
 
 
 [response 404 *] -> [200]

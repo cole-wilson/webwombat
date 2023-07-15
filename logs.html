@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width">
+		<title>WebWombat Log</title>
+		<style>
+body {
+	font-family:monospace;
+}
+		</style>
+	</head>
+	<body>
+		<code><pre id="log"></pre></code>
+		<script>
+let ws = new WebSocket("wss://" + location.host + ":842")
+ws.onmessage = (m) => {
+	console.log(m.data);
+	document.getElementById('log').innerHTML += (m.data.replaceAll("\n", "<br>"))
+}
+		</script>
+	</body>
+</html>
