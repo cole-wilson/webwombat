@@ -7,17 +7,77 @@
 		<style>
 body {
 	font-family:monospace;
+	margin: 0;
+	overflow-x: hidden;
 }
+th, td {text-align: left;max-width: 500px;overflow:hidden;white-space: nowrap;max-height:1em;padding: 0 10px 0;}
+table {border-collapse: collapse;width:100%}
+.clickable:hover, .clicked {cursor:pointer;background: lightgrey;}
+#list {height: 46vh;overflow:auto;width:100%;}
+#big {width: 100%;overflow-x: auto;}
+.headerkey {display: inline-block;width: 200px;}
+.headervalue {display: inline-block;}
+.nowrap {white-space: nowrap;}
+#corner {position: fixed;top:0;right:0}
+header {text-align: center;width: 100%;line-height: 2em;}
 		</style>
 	</head>
 	<body>
-		<code><pre id="log"></pre></code>
-		<script>
-let ws = new WebSocket("wss://" + location.host + ":842")
-ws.onmessage = (m) => {
-	console.log(m.data);
-	document.getElementById('log').innerHTML += (m.data.replaceAll("\n", "<br>"))
-}
-		</script>
+		<noscript>please enable javascript to view log dashboard</noscript>
+		<header><b>webwombat logging dashboard</b></header>
+		<div id="app">
+			<div id="list">
+				<input v-model="searchtext" placeholder="search...">
+				<button @click="clear()">clear all local copies of logs</button>
+				<table>
+					<tr>
+						<th></th>
+						<th>time</th>
+						<th>id</th>
+						<th>method</th>
+						<th>domain</th>
+						<th>path</th>
+						<th>status</th>
+					</tr>
+					<tr :class="{clicked:current_id==request.id}" class="clickable" @click="current_id=request.id;current_request=request" v-for="(request, index) in requests.filter(i=>searchtext==''||JSON.stringify(i).toLowerCase().includes(searchtext.toLowerCase()))">
+						<td>{{index+1}}</td>
+						<td>{{formatTime(request[1].time)}}</td>
+						<td>{{request.id}}</td>
+						<td>{{request[1].method}}</td>
+						<td>{{request[1].headers.host}}{{(2 in request) ? " → " + request[2].headers.host : ""}}</td>
+						<td :title="request[1].path">{{request[1].path}}</td>
+						<td v-if="4 in request">{{request[4].status}} {{request[4].reason}}</td><td v-else>(pending...)</td>
+					</tr>
+				</table>
+			</div>
+			<hr>
+			<div id="big">
+				<button @click="current_id='all'">show all logs</button>
+				<div v-if="current_id == 'all'">
+<pre><span v-for="i in all.filter(i=>JSON.stringify(i).includes(searchtext))">{{formatLogLine(i)}}</span></pre>
+				</div>
+				<div v-for="i in 4" v-else-if="current_request">
+					<div v-if="i in current_request">
+						<b>{{["browser → proxy", "proxy → remote", "remote → proxy", "proxy → browser"][i-1]}}</b> {{formatTime(current_request[i].time)}}<br>
+						<span>
+							{{current_request[i].method}}
+							{{current_request[i].headers.host}}
+							{{current_request[i].path}}
+							{{current_request[i].version}}
+							{{current_request[i].status}}
+							{{current_request[i].reason}}
+						</span><br>
+						<table>
+						<tr class="nowrap" v-for="(v, k) in current_request[i].headers"><td class="headerkey">{{k}}:</td><td class="headervalue">{{v}}</td></tr>
+						</table>
+						<br><br>
+					</div>
+				</div>
+				<b v-if="current_id != 'all'">logs</b><br>
+<pre><span v-for="i in all.filter(i=>i.requestid==current_id)">{{formatLogLine(i)}}</span></pre>
+			</div>
+		</div>
+		<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+		<script src="/main.js"></script>
 	</body>
 </html>

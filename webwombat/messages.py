@@ -38,18 +38,20 @@ class CaseInsensitiveDict(dict):
     def __getitem__(self, k): return super().__getitem__(k.lower())
     def __delitem__(self, k): return super().__delitem__(k.lower())
     def __setitem__(self, k, v): return super().__setitem__(k.lower(), v)
+    def __contains__(self,o):return super().__contains__(o.lower())
 
 class Message:
     messagetype = None
     sourcefile = io.BytesIO(b"")
+    skiprest = False
 
     port = None
 
-    method = "GET"
-    locator = "/"
-    version = "HTTP/1.1"
-    status = "0"
-    reason = "No Reason"
+    method = None
+    locator = None
+    version = None
+    status = None
+    reason = None
     headers: dict[str, str] = CaseInsensitiveDict({})
 
 
@@ -75,16 +77,30 @@ class Message:
             if not headerline: break
             k, v = headerline.split(b": ", 1)
             self.headers[k.decode()] = v.decode()
+        if 'host' in self.headers:
+            self['host'] = self['host'].split(":")[0]
 
     def send_to(self, destination) -> Thread:
-        if self.body_type == "raw":
+        if self.method == "TUNNEL":
             self.sourcefile.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-            while True:
-                data = self.sourcefile.read(1)
-                if data == b'': break
-                print(data, end='')
-                sys.stdout.flush()
-                destination.write(data)
+            if isinstance(self.sourcefile, SocketBuffer):
+                self.sourcefile.disablelogging()
+            destination.disablelogging()
+            def _sendbody():
+                while True:
+                    data = self.sourcefile.read(1)
+                    # print(data, end="")
+                    if data == b'': break
+                    sys.stdout.flush()
+                    try:
+                        destination.write(data)
+                    except BrokenPipeError:
+                        break
+                if isinstance(self.sourcefile, SocketBuffer):
+                    self.sourcefile.enablelogging()
+                destination.enablelogging()
+            return Thread(target=_sendbody)
+
         elif self.body_type == "empty":
             return Thread(target=destination.write, args=[self.encode()])
 
@@ -152,9 +168,7 @@ class Message:
 
     @property
     def body_type(self) -> str:
-        if self.messagetype == 'request' and self.method == 'CONNECT':
-            return 'raw'
-        elif 'content-length' in self.headers:
+        if 'content-length' in self.headers:
             return 'normal'
         elif 'transfer-encoding' in self.headers and self.headers['transfer-encoding'].startswith('chunked'):
             if 'content-encoding' in self.headers:
@@ -185,13 +199,15 @@ class Message:
 
     def __getitem__(self, name):
         return self.headers[name]
+    def __contains__(self, name):
+        return name in self.headers
     def __setitem__(self, name, value):
         self.headers[name] = value
     def __delitem__(self, name):
         del self.headers[name]
 
     def __repr__(self):
-       return f"<{type(self).__name__} {self.statusline.decode()}>"
+        return f"<{type(self).__name__} {self.headers['host'] if 'host' in self.headers else ''} {self.statusline.decode()[:45]}>"
 
     def __bytes__(self, *_):
         output = b""
@@ -199,6 +215,7 @@ class Message:
         for k, v in self.headers.items():
             output += str(k).title().encode('utf-8') + b": " + str(v).encode('utf-8') + CRLF
         output += CRLF
-        return self.function(output)
+        return output
+        # return self.function(output)
 
     encode = __bytes__

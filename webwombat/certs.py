@@ -2,16 +2,18 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography import x509
 from cryptography.x509.oid import NameOID
-from .config import get_config
 import ssl
 import datetime
 import os
 from pathlib import Path
 from functools import lru_cache
+from . import get_config, logger
 
 def generate_root_certificate():
     """given a set of options and an expiration date, create a root certificate and private key to sign secondary certs"""
+
     config = get_config()
+
     options = {
         "COMMON_NAME": config.ca_name,
         "COUNTRY_NAME": config.cert_country,
@@ -22,6 +24,7 @@ def generate_root_certificate():
     # setup output directory
     outputdir = Path(config.cacertdir).expanduser()
     if not outputdir.exists():
+        logger.log(logger.LogLevel.SSL, f"creating SSL CA Cert directory at {outputdir}")
         os.makedirs(outputdir)
 
     # generate keys
@@ -54,6 +57,8 @@ def generate_root_certificate():
     with open(outputdir / "ca_cert.pem", "wb") as fout:
         fout.write(cert_bytes)
 
+    logger.log(logger.LogLevel.SSL, f"created root certificate in {outputdir}/ca_cert.pem")
+
     # return the provate key and certificate
     return private_key, certificate
 
@@ -68,6 +73,7 @@ def get_root_certificate():
             private_key = serialization.load_pem_private_key(pemfile.read(), None)
         with open(outputdir / "ca_cert.pem", 'rb') as pemfile:
             cert = x509.load_pem_x509_certificate(pemfile.read())
+        logger.log(logger.LogLevel.SSL, f"retreived root certificate found in {outputdir}/ca_cert.pem")
         return private_key, cert
 
     # otherwise we make them
@@ -79,6 +85,8 @@ def new_cert(domain):
     global certificates
 
     config = get_config()
+
+
     options = {
         "COMMON_NAME": config.ca_name,
         "COUNTRY_NAME": config.cert_country,
@@ -113,6 +121,8 @@ def new_cert(domain):
     with open(certdir / f"{domain}.key", "wb") as fout:
         fout.write(private_bytes)
 
+    logger.log(logger.LogLevel.SSL, f"generated new domain certificate for {domain} at {certdir}/{domain}.[key|pem]")
+
 def handle_ssl(sock, hostname, _):
     config = get_config()
     certdir = Path(config.certdir).expanduser()
@@ -123,5 +133,6 @@ def handle_ssl(sock, hostname, _):
         certfile=certdir / f"{hostname}.pem",
         keyfile=certdir / f"{hostname}.key",
     )
+    logger.log(logger.LogLevel.SSL, f"loaded SSL certificate for {hostname}")
     # print(certdir/f"{hostname}.pem")
     sock.context = context

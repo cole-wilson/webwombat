@@ -1,6 +1,7 @@
 import re
 import fnmatch
-from .config import get_rules, star_replace, ExternalObject
+from .configs import star_replace, ExternalObject
+from . import get_rules
 # from constants import PROXY_SUFFIX
 
 class NoMatch(Exception): pass
@@ -40,11 +41,14 @@ def filter(message):
 
             for func in action.funcs:
                 message = func.get()(message, *func.args)
+                if message.skiprest:
+                    break
 
 
             if message.messagetype == "request":
                 if 'method' in action: message.method = star_replace(method, action.method, message.method)
                 if 'domain' in action: message['host'] = star_replace(domain, action.domain, message['host'])
+
                 if 'path' in action:   message.locator = star_replace(locator, action.path, message.locator)
             elif message.messagetype == "response":
                 if 'status' in action: message.status = star_replace(status, action.status, message.status)

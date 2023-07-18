@@ -15,7 +15,7 @@ options = {
 	"install_requires": ['requests', 'setuptools', 'lark', 'blessed', 'cryptography', 'brotli'],
 	"classifiers": ["Programming Language :: Python :: 3"],
 	"python_requires": '>=3.6',
-	"package_data": {"": ['*.cube', '*.lark', '*.html'], },
+	"package_data": {"": ['*.cube', '*.lark', '*.html', '*.js'], },
 	"license": "MIT",
 	"keywords": '',
 	"setup_requires": ['wheel'],

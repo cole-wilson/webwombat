@@ -10,11 +10,8 @@ import re
 import sys
 import os
 # from .logger import log, LogLevel
-from . import logger
-
-grammar_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/g.lark"
-grammar = open(grammar_path).read()
-logger.log(logger.LogLevel.CONFIG, "loaded configuration grammar from {grammar_path}")
+from . import logger, DottedDict
+import webwombat
 
 def star_replace(pattern, replace, text):
     # ?.*.com    *.?.proxy    a.google.com
@@ -36,12 +33,10 @@ def star_replace(pattern, replace, text):
                 pass
         else:
             output += char
-    return output
 
-class DottedDict(dict):
-    __getattr__ = lambda self, *args: self.__getitem__(*args)
-    __setattr__ = lambda self, *args: self.__setitem__(*args)
-    __delattr__ = lambda self, *args: self.__delitem__(*args)
+    logger.log(logger.LogLevel.CONFIG, f"star_replace({pattern!r}, {replace!r}, {text!r}) -> {output}")
+
+    return output
 
 class ExternalObject:
     def __init__(self, modulestr=None, attrstr=None, *args):
@@ -125,6 +120,7 @@ class Transformer(lark.Transformer):
     def SUB_REGEX(self, text):
         _, pattern, sub, flags = re.split(r"(?<!\\)/", text)
         ordflags = re.MULTILINE
+        bodyonly = True
         for flag in flags:
             if hasattr(re, flag.upper()):
                 ordflags |= getattr(re, flag.upper())
@@ -139,29 +135,39 @@ class Transformer(lark.Transformer):
     arg = lambda _, i: i[0]
     keyvalue = list = lambda _, i: i
 
-global_config = None
 
-def load(path, defaults = {}):
-    global global_config
+def load(path, defaults = {}, overrides={}):
+    grammar_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/g.lark"
+    grammar = open(grammar_path).read()
 
     parser = lark.Lark(grammar)
     with open(Path(path).expanduser(), 'r') as configuration_file:
         tree = parser.parse(configuration_file.read())
-    global_config = Transformer().transform(tree)
+    webwombat.global_config = Transformer().transform(tree)
 
     for k, v in defaults.items():
-        if k not in global_config[0]:
-            global_config[0][k] = v
+        if k not in webwombat.global_config[0]:
+            webwombat.global_config[0][k] = v
 
-def get_config():
-    assert global_config is not None
-    return global_config[0]
+
+    for k, v in overrides.items():
+        webwombat.global_config[0][k] = v
+
+    logger.log(logger.LogLevel.CONFIG, f"loaded configuration grammar from {grammar_path}")
+    logger.log(logger.LogLevel.CONFIG, f"read config tree: {tree}")
+    logger.log(logger.LogLevel.CONFIG, f"config: {webwombat.global_config[0]}")
+    logger.log(logger.LogLevel.CONFIG, f"rules: {webwombat.global_config[1]}")
+
+# def get_config():
+#     assert global_config is not None
+#     return global_config[0]
 def get_rules():
-    assert global_config is not None
-    return global_config[1]
+    logger.log(logger.LogLevel.CONFIG, "got rules")
+    assert webwombat.global_config is not None
+    return webwombat.global_config[1]
 
 if __name__ == "__main__":
     load(sys.argv[1])
-    print(get_config())
-    print()
+    print(webwombat.global_config)
+    # print()
     print(get_rules())
