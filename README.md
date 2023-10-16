@@ -73,7 +73,7 @@ webwombat v0.0.0
 
 ## Configuration
 The basic `.cube` file looks like this:
-```cube
+```javascript
 /* basic options (this is a comment) */
 ports = 80, 443 /*LIST of numbers, no trailing comma*/
 boolean = yes /* or no, false, true, yah, nah, etc. */
