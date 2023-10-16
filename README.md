@@ -128,6 +128,9 @@ A few common transformers are provided in the [webwombat/transformers.py](./webw
 |`@setup`|proxyDomain=None|sets up a basic site where you can download the ca cert and also has a /proxy.pac auto-config file (if proxyDomain is set)|
 |`@showlogs`|(n/a)|load a basic logging website where you can view requests using streaming websockets (not very secure)|
 
+## Examples
+...
+
 ## the `Message` object
 The `Message` object has a lot of stuff in it, but the main things are as follows:
 ### properties
