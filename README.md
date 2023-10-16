@@ -6,6 +6,15 @@ a socket-level HTTP proxy with extensive configuration options and uses
 > 
 > THE AUTHOR OF THIS SOFTWARE CLAIMS NO RESPONSIBILITY FOR POOR CHOICES OR ACTIONS, AND ONLY PROVIDES THIS SOFTWARE UNDER THE CONDITION THAT IT IS USED FOR POSITIVE, CONSTRUCTIVE REASONS.
 
+## Table of Contents
+1. [Overview](#overview)
+2. [Installation](#installation)
+3. [Usage](#usage)
+4. [Configuration](#configuration)
+5. [Transformers](#transformers)
+6. [Examples](#examples)
+7. [the Message Object](#the-message-object)
+
 ## Overview
 webwombat will auto-generate site certificates for you in order to "edit" HTTPS traffic
 
@@ -27,7 +36,7 @@ sudo pip3 install webwombat
 ```
 
 ## Usage
-Use the `wombat config.cube` command (or `python3 -m webwombat config.cube`) with a `.cube` config file (see below for config).
+Use the `wombat config.cube` command (or `python3 -m webwombat config.cube`) with a `.cube` config file (see [configuration](#configuration) section below).
 ```shell
 usage: wombat configfile [--help] [-options]
 
@@ -91,3 +100,57 @@ Via: "Web Wombat v0.0.2"
 [request CONNECT *] -> [TUNNEL *.localhost] /* any SSL requests with the method CONNECT will be forwarded to *.localhost with the special TUNNEL command for HTTPS proxy */
 ```
 
+## Transformers
+You can use any python function to modify a request or response you want by using the `@module.module:function args...` syntax. 
+
+### Making your own transformer
+```python3
+def switchport(message: wombat.messages.Message, arg1, arg2=None):
+    message.port = arg1
+    return message
+```
+You can modify the Message object that is passed as the first argument, or return an entirely new message using the constructor (see [Message objects](#the-message-object)).
+
+You can also use the built-in `_bytestomessage(bytes, code, reason="", headers={})` function in webwombat.transformers you return a basic message.
+
+If you want to prevent any other functions from editing the message you return, you can set the `message.skiprest = True` flag, which will immediately bypass any other modifications.
+
+### Provided Transformers
+A few common transformers are provided in the [webwombat/transformers.py](./webwombat/transformers.py) file. These are the default namespace, so you can refer to them just using `@function`.
+
+|name|arguments|description|
+|----|---------|-----------|
+|`@returnfile`|path, code=200, contentType="text/plain", reason="", headers={}|return the file at `path` with the provided metadata (WARNING: no sandboxing, use at own risk)|
+|`@returntext`|text, code=200, contentType="text/plain", reason="", headers={}|return the given text (utf-8) in the same manner as `@returnfile`|
+|`@notfound`|(n/a)|return a simple not found page|
+|`@switchport`|newport|switch the request port (from default like 80 to something like 8080)|
+|`@basicauth`|username, password, proxy=True, realm="authentication required", message="auth required"|require basic auth for authentication, if proxy==True then it uses the proxy prefix in headers|
+|`@setup`|proxyDomain=None|sets up a basic site where you can download the ca cert and also has a /proxy.pac auto-config file (if proxyDomain is set)|
+|`@showlogs`|(n/a)|load a basic logging website where you can view requests using streaming websockets (not very secure)|
+
+## the `Message` object
+The `Message` object has a lot of stuff in it, but the main things are as follows:
+### properties
+|property|default value|description|
+|--------|-------------|-----------|
+|messagetype|None|'response' or 'request'|
+|sourcefile|BytesIO(b"")|file object of body|
+|skiprest|False|whether to skip further modifications}
+|port|None (changed to original request port)|port used|
+|method|None|request method|
+|locator|None|path (or proxy domain) of file|
+|version|None|such as HTTP/1.1|
+|status|None|such as 200|
+|reason|None|such as "Not Found"|
+|headers|CaseInsensitiveDict({})|headers for request|
+|statusline|(@property)|returns the statusline in a string|
+|body_type|(@property)|body type (normal, encoded_chunks, empty, chunked)|
+
+### methods
+|method|description|
+|------|-----------|
+|read_statusline() -> None|fill out the above properties and read the statusline of the file object|
+|read_headers() -> None|fill out headers object and read the remainder of the header of the file object|
+|send_to(destination) -> Thread|return a Threead object that will send to a given SocketBuffer (you shouldn't need to use this at all)|
+|get_dencoders() -> tuple[list, list]|return a list of decoders and encoders (you shouldn't need to use this at all either)|
+|__bytes__(*_)|return the bytes of the head (including statusline and headers)
