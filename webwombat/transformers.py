@@ -68,8 +68,8 @@ def setup(m, proxyDomain=None):
 
 def showlogs(m):
     if m.locator == "/":
-        return returnfile(m, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/logs.html", code=200, contentType='text/html', reason="Okay")
+        return returnfile(m, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/webwombat/logs.html", code=200, contentType='text/html', reason="Okay")
     elif m.locator == "/main.js":
-        return returnfile(m, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/main.js", code=200, contentType='application/javascript', reason="Okay")
+        return returnfile(m, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/webwombat/main.js", code=200, contentType='application/javascript', reason="Okay")
     else:
         return notfound(m)

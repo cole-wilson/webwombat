@@ -2,7 +2,7 @@ import setuptools
 
 options = {
 	"name": "webwombat",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"scripts": [],
     "entry_points": {'console_scripts': ['wombat=webwombat.__main__:main']},
 	"author": "Cole Wilson",

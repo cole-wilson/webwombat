@@ -137,7 +137,7 @@ class Transformer(lark.Transformer):
 
 
 def load(path, defaults = {}, overrides={}):
-    grammar_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/g.lark"
+    grammar_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/webwombat/g.lark"
     grammar = open(grammar_path).read()
 
     parser = lark.Lark(grammar)
