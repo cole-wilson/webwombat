@@ -13,7 +13,7 @@ a socket-level HTTP proxy with extensive configuration options and uses
 4. [Configuration](#configuration)
 5. [Transformers](#transformers)
 6. [Examples](#examples)
-7. [the Message Object](#the-message-object)
+7. [the `Message` Object](#the-message-object)
 
 ## Overview
 webwombat will auto-generate site certificates for you in order to "edit" HTTPS traffic
