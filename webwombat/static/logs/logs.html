@@ -20,6 +20,9 @@ table {border-collapse: collapse;width:100%}
 .nowrap {white-space: nowrap;}
 #corner {position: fixed;top:0;right:0}
 header {text-align: center;width: 100%;line-height: 2em;}
+
+[status="200"] {color: green;}
+[status="404"] {color: red;}
 		</style>
 	</head>
 	<body>
@@ -39,7 +42,7 @@ header {text-align: center;width: 100%;line-height: 2em;}
 						<th>path</th>
 						<th>status</th>
 					</tr>
-					<tr :class="{clicked:current_id==request.id}" class="clickable" @click="current_id=request.id;current_request=request" v-for="(request, index) in requests.filter(i=>searchtext==''||JSON.stringify(i).toLowerCase().includes(searchtext.toLowerCase()))">
+					<tr :status="request[4].status" :class="{clicked:current_id==request.id}" class="clickable" @click="current_id=request.id;current_request=request" v-for="(request, index) in requests.filter(i=>searchtext==''||JSON.stringify(i).toLowerCase().includes(searchtext.toLowerCase()))">
 						<td>{{index+1}}</td>
 						<td>{{formatTime(request[1].time)}}</td>
 						<td>{{request.id}}</td>
@@ -74,7 +77,9 @@ header {text-align: center;width: 100%;line-height: 2em;}
 					</div>
 				</div>
 				<b v-if="current_id != 'all'">logs</b><br>
+				<textarea>
 <pre><span v-for="i in all.filter(i=>i.requestid==current_id)">{{formatLogLine(i)}}</span></pre>
+</textarea>
 			</div>
 		</div>
 		<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
