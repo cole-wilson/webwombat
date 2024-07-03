@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width">
+		<title>wombat configurator</title>
+		<link rel="stylesheet" href="/style.css">
+	</head>
+	<body>
+		<main>
+		<section id="allrules">
+			<h1>rules:</h1>
+			<div  class="rule" v-for="(r, i) in rules" @click="rule = r;currentrule=i;" :style="{background:(currentrule===i)?'grey':'lightgrey'}">
+				<span>{{ruleheader(r)}}</span><br><br>
+			</div>
+			<div v-if="rules.length == 0">rules you add will appear here</div>
+			<button @click="newrule()">add rule</button>
+		</section>
+		<section id="rule" v-if="rule">
+			<h1><span v-if="currentrule!=null">update rule:</span><span v-else>new rule:</span></h1>
+			<label>
+				rule type: <select v-model="rule.type"><option selected disabled>(select rule type)</option><option>request</option><option>response</option></select>
+			</label><br>
+			<!-- <label> -->
+			<!-- 	rule name: <input v-model="rule.name"> -->
+			<!-- </label> -->
+			<br>
+			<details open v-if="rule.type"><summary>match:</summary>
+				<br>
+				<fieldset v-if="rule.type=='request'">
+					<legend>method</legend>
+					<list :data="rule.match.method" type="text" placeholder="GET"></list>
+				</fieldset>
+
+				<fieldset v-else>
+					<legend>status</legend>
+					<list :data="rule.match.status" type="number" placeholder="404"></list>
+				</fieldset>
+
+				<fieldset>
+					<legend>domain</legend>
+					<list :data="rule.match.domain" type="text" placeholder="*.localhost"></list>
+				</fieldset>
+
+				<fieldset>
+					<legend>path</legend>
+					<list :data="rule.match.path" type="text" placeholder="/*/*.html"></list>
+				</fieldset>
+
+				<fieldset>
+					<legend>headers</legend>
+					<list :data="rule.match.headers" type="text" placeholder="Key? or Key: Value1 | Value2"></list>
+				</fieldset>
+			</details>
+
+			<details open v-if="rule.type"><summary>action:</summary>
+				<br>
+				<fieldset v-if="rule.type=='request'">
+					<legend>method</legend>
+					<input v-model="rule.action.method" placeholder="POST">
+				</fieldset>
+				<fieldset v-else>
+					<legend>status</legend>
+					<input v-model="rule.action.status" placeholder="200">
+				</fieldset>
+				<fieldset>
+					<legend>domain</legend>
+					<input v-model="rule.action.domain" placeholder="fbi.com">
+				</fieldset>
+				<fieldset>
+					<legend>path</legend>
+					<input v-model="rule.action.path" placeholder="/index.html">
+				</fieldset>
+				<fieldset>
+					<legend>headers</legend>
+					<list :data="rule.action.headers" type="text" placeholder="Key? or Key: Value1 | Value2"></list>
+				</fieldset>
+				<fieldset>
+					<legend>external functions</legend>
+					<list :data="rule.action.funcs" type="text" placeholder="@function module:object.function arg1 arg2"></list>
+				</fieldset>
+				<fieldset>
+					<legend>substitutions</legend>
+					<list :data="rule.action.subs" type="text" placeholder="/search_regex/replace/flags"></list>
+				</fieldset>
+			</details>
+			<button @click="addrule()" v-if="currentrule===false">add rule</button>
+		</section>
+		</main>
+		<script src="/vue.js"></script>
+		<script src="/main.js"></script>
+	</body>
+</html>

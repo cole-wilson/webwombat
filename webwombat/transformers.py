@@ -1,7 +1,8 @@
-from webwombat import get_config
+from webwombat import get_config, get_rules
 from webwombat.messages import Message
 import io
 import os
+import json
 import base64
 
 def returnfile(_, path, code=200, contentType="text/plain", reason="", headers={}):
@@ -21,13 +22,12 @@ def switchport(m, port):
     return m
 
 def redirect(m, url):
-    return _bytestomessage(b"redirect", code=302, reason="Redirect", headers={"Location":url})
+    return returntext(m, "redirect", code=302, reason="Redirect", headers={"Location":url})
 
 def basicauth(m, username, password, proxy=True, realm="authentication required", message="auth required"):
     prefix = ('proxy-' if proxy else '')
     if prefix + 'authorization' in m:
         userpass = m[prefix + 'authorization']
-        print(userpass)
         given_u, given_p = base64.b64decode(userpass.strip("Basic ").encode()+b"=").decode().split(":")
         if given_p == password and given_u == username:
             return m
@@ -55,10 +55,17 @@ def _bytestomessage(b, code, reason="", headers={}):
 
     return message
 
+def servedirectory(m, files={}):
+    if m.locator in files:
+        localpath, mime = files[m.locator]
+        return returnfile(m, localpath, contentType=mime)
+    else:
+        return notfound(m)
+
 def setup(m, proxyDomain=None):
     config = get_config()
     if m.locator == "/":
-        return returntext(m, "hello!<br><a href='/cert.pem' download='wombat_cert.pem'>cert.pem</a>", contentType="text/html")
+        return returnfile(m, _staticpath("setup/index.html"), code=200, contentType='text/html', reason="Okay")
     elif m.locator == "/proxy.pac" and proxyDomain is not None:
         return returntext(m, "function FindProxyForURL(url, host) {return 'PROXY " + proxyDomain + ":" + str(config.ports[0]) + "'}", contentType="application/x-ns-proxy-autoconfig")
     elif m.locator == "/cert.pem":
@@ -66,10 +73,28 @@ def setup(m, proxyDomain=None):
     else:
         return notfound(m)
 
-def showlogs(m):
-    if m.locator == "/":
-        return returnfile(m, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/webwombat/static/logs/logs.html", code=200, contentType='text/html', reason="Okay")
-    elif m.locator == "/main.js":
-        return returnfile(m, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/webwombat/static/logs/main.js", code=200, contentType='application/javascript', reason="Okay")
+def _staticpath(subpath):
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + "/webwombat/static/" + subpath.lstrip("/")
+
+def configurator(m):
+    class CustomEncoder(json.JSONEncoder):
+        def default(self, o):
+            return o.__dict__
+    rules = get_rules()
+
+    if m.locator == "/rules.json":
+        return returntext(m, json.dumps(rules, cls=CustomEncoder), contentType="application/json")
     else:
-        return notfound(m)
+        return servedirectory(m, {
+            "/": (_staticpath("configurator/index.html"), "text/html"),
+            "/main.js": (_staticpath("configurator/main.js"), "application/javascript"),
+            "/style.css": (_staticpath("configurator/style.css"), "text/css"),
+            "/vue.js": (_staticpath("vue.js"), "application/javascript"),
+        })
+
+def showlogs(m):
+    return servedirectory(m, {
+        "/": (_staticpath("logs/index.html"), "text/html"),
+        "/main.js": (_staticpath("logs/main.js"), "application/javascript"),
+        "/vue.js": (_staticpath("vue.js"), "application/javascript"),
+    })

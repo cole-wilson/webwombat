@@ -1,0 +1,33 @@
+body {
+	background: lightgrey;
+	font-family: monospace;
+}
+textarea {
+	vertical-align: top;
+}
+input {
+	width: 80%;
+}
+
+#rule {
+	float: right;
+	width: 49vw;
+}
+
+#allrules {
+	float: left;
+	width: 46vw;
+	height: 100vh;
+	box-sizing: border-box;
+	border-right: 2px solid black;
+}
+
+.rule:hover {
+	background: grey!important;
+	cursor: pointer;
+}
+details {
+	width: 48%;
+	display: inline-block;
+	vertical-align: top;
+}

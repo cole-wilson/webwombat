@@ -6,7 +6,7 @@ from webwombat.logger import LogLevel, log, sharemessage
 import traceback
 from . import messages, filters, buffers, certs, WOMBAT
 from . import WOMBAT, get_config
-from uuid import uuid4
+# from uuid import uuid4
 # from .config import get_config
 
 def main(browser, port, usessl, uuid):
